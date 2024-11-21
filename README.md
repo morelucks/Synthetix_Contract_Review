@@ -164,5 +164,72 @@ The contract facilitates several exchange mechanisms:
             );
     }
 
+### 3. Settlement of Synth Balances
+- The `settle` function reconciles pending synth exchange entries for a user, ensuring any reclaimed or refunded amounts are accounted for.
+  ```solidity
+  function settle(bytes32 currencyKey)
+        external
+        optionalProxy
+        returns (
+            uint reclaimed,
+            uint refunded,
+            uint numEntriesSettled
+        )
+    {
+        return exchanger().settle(messageSender, currencyKey); // from basesynthetix, from IExchanger: the sender and currency
+    }
+
+
+### 4. Minting and Rewards Distribution
+### Mint Functionality
+The `mint (130-160)` function integrates with the `SupplySchedule` and `RewardsDistribution` contracts to:
+1. Mint new tokens.
+2. Allocate minted tokens between rewards escrow and minters.
+3. Update the total supply.
+
+
+   ```solidity
+   function mint() external issuanceActive returns (bool) {
+        require(address(rewardsDistribution()) != address(0), "RewardsDistribution not set");
+
+        ISupplySchedule _supplySchedule = supplySchedule();
+        IRewardsDistribution _rewardsDistribution = rewardsDistribution();
+
+        uint supplyToMint = _supplySchedule.mintableSupply();
+        require(supplyToMint > 0, "No supply is mintable");
+
+        emitTransfer(address(0), address(this), supplyToMint);
+
+        // record minting event before mutation to token supply
+        uint minterReward = _supplySchedule.recordMintEvent(supplyToMint);
+
+        // Set minted SNX balance to RewardEscrow's balance
+        // Minus the minterReward and set balance of minter to add reward
+        uint amountToDistribute = supplyToMint.sub(minterReward);
+
+        // Set the token balance to the RewardsDistribution contract
+        tokenState.setBalanceOf(
+            address(_rewardsDistribution),
+            tokenState.balanceOf(address(_rewardsDistribution)).add(amountToDistribute)
+        );
+        emitTransfer(address(this), address(_rewardsDistribution), amountToDistribute);
+
+        // Kick off the distribution of rewards
+        _rewardsDistribution.distributeRewards(amountToDistribute);
+
+        // Assign the minters reward.
+        tokenState.setBalanceOf(msg.sender, tokenState.balanceOf(msg.sender).add(minterReward));
+        emitTransfer(address(this), msg.sender, minterReward);
+
+        // Increase total supply by minted amount
+        totalSupply = totalSupply.add(supplyToMint);
+
+        return true;
+    }
+
+
+### 5. Events and Logging
+- Events such as `AtomicSynthExchange (line-182)` provide transparency and auditability for key operations, ensuring compliance with DeFi standards.
+
 
 
