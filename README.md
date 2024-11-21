@@ -70,4 +70,99 @@ The BaseSynthetix contract is a foundational component of the Synthetix protocol
 ### Contract Review
 The contract uses pragma solidity ^0.5.16, (line 1) which is outdated and potentially insecure. It is recommended to upgrade to Solidity ^0.8.x for enhanced security features like automatic overflow/underflow checks though the contract made use of safemath library.
 
+## 2 sythetix.sol
+The Synthetix contract is an integral component of the Synthetix protocol, a decentralized finance (DeFi) platform for trading synthetic assets. This contract extends the BaseSynthetix contract and incorporates additional functionality, such as managing interactions with reward escrow systems, supply schedules, and exchange mechanisms. It utilizes modular design principles and advanced Solidity features, such as ABIEncoderV2 (line-2)
+
+
+### Key Features and Functionality
+
+### 1. Inheritance and Address Resolver
+- **Inheritance**: The contract inherits from `BaseSynthetix (line-13)`, ensuring it leverages common functionality while extending specific features.
+- **Address Resolver**: The `resolverAddressesRequired on line 30-36` function adds additional dependencies (`RewardEscrow` and `SupplySchedule`) to the base set of required addresses. This function ensures the contract properly integrates additional dependencies (RewardEscrow and SupplySchedule) while maintaining existing functionalities
+  
+  ```solidity
+  function resolverAddressesRequired() public view returns (bytes32[] memory addresses) {
+        bytes32[] memory existingAddresses = BaseSynthetix.resolverAddressesRequired(); //basesynthetix (line-59-68)
+        bytes32[] memory newAddresses = new bytes32[](2);
+        newAddresses[0] = CONTRACT_REWARD_ESCROW;
+        newAddresses[1] = CONTRACT_SUPPLYSCHEDULE;
+        return combineArrays(existingAddresses, newAddresses);
+    } 
+
+### 2. Exchange Mechanisms
+The contract facilitates several exchange mechanisms:
+- **`exchangeWithVirtual (line 50-73)`**: Enables exchanges that create virtual synths.
+  ```solidity
+      function exchangeWithVirtual(
+        bytes32 sourceCurrencyKey,
+        uint sourceAmount,
+        bytes32 destinationCurrencyKey,
+        bytes32 trackingCode
+    )
+        external
+        exchangeActive(sourceCurrencyKey, destinationCurrencyKey) // Ensures that the exchange is enabled for the provided source and destination currency keys.
+
+        optionalProxy    // Allows the caller to act on behalf of another address if specified.
+        returns (uint amountReceived, IVirtualSynth vSynth)
+    {
+        return
+            exchanger().exchange(
+                messageSender,
+                messageSender,
+                sourceCurrencyKey,
+                sourceAmount,
+                destinationCurrencyKey,
+                messageSender,
+                true,
+                messageSender,
+                trackingCode
+            );
+    }
+  
+- **`exchangeWithTrackingForInitiator (78-90)`**: Tracks exchanges for the initiating user, with the reward distribution address specified.
+
+  ```solidity
+  function exchangeWithTrackingForInitiator(
+        bytes32 sourceCurrencyKey,
+        uint sourceAmount,
+        bytes32 destinationCurrencyKey,
+        address rewardAddress,
+        bytes32 trackingCode
+    ) external exchangeActive(sourceCurrencyKey, destinationCurrencyKey) optionalProxy returns (uint amountReceived) {
+        (amountReceived, ) = exchanger().exchange( // from basesynthetix and IExchanger
+            messageSender,
+            messageSender,
+            sourceCurrencyKey,
+            sourceAmount,
+            destinationCurrencyKey,
+            // solhint-disable avoid-tx-origin
+            tx.origin,
+            false,
+            rewardAddress,
+            trackingCode
+        );
+    }
+  
+- **`exchangeAtomically`**: Provides atomic exchange capabilities with a specified minimum return amount.
+   ```solidity
+    function exchangeAtomically(
+        bytes32 sourceCurrencyKey,
+        uint sourceAmount,
+        bytes32 destinationCurrencyKey,
+        bytes32 trackingCode,
+        uint minAmount
+    ) external exchangeActive(sourceCurrencyKey, destinationCurrencyKey) optionalProxy returns (uint amountReceived) {
+        return
+            exchanger().exchangeAtomically( // exchanger interface
+                messageSender,
+                sourceCurrencyKey,
+                sourceAmount,
+                destinationCurrencyKey,
+                messageSender,
+                trackingCode,
+                minAmount
+            );
+    }
+
+
 
